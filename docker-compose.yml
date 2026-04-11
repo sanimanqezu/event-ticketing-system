@@ -1,0 +1,92 @@
+version: "3.9"
+
+services:
+
+  # ─── Databases ────────────────────────────────────────────────────────────
+
+  postgres-events:
+    image: postgres:15-alpine
+    container_name: postgres-events
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: events_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_events_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d events_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-bookings:
+    image: postgres:15-alpine
+    container_name: postgres-bookings
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookings_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_bookings_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bookings_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Microservices ────────────────────────────────────────────────────────
+
+  events-service:
+    build:
+      context: ./events-service
+      dockerfile: Dockerfile
+    container_name: events-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: jdbc:postgresql://postgres-events:5432/events_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres-events:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  bookings-service:
+    build:
+      context: ./bookings-service
+      dockerfile: Dockerfile
+    container_name: bookings-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      DB_URL: jdbc:postgresql://postgres-bookings:5432/bookings_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      EVENTS_SERVICE_URL: http://events-service:8081
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres-bookings:
+        condition: service_healthy
+      events-service:
+        condition: service_healthy
+
+# ─── Volumes ────────────────────────────────────────────────────────────────
+
+volumes:
+  postgres_events_data:
+  postgres_bookings_data:
