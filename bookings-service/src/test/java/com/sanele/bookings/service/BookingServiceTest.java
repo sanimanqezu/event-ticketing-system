@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -195,5 +196,88 @@ class BookingServiceTest {
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).customerEmail()).isEqualTo("sanele@example.com");
+    }
+
+    @Test
+    @DisplayName("createBooking — should throw EventServiceException when the event does not exist")
+    void createBooking_shouldThrowException_whenEventNotFound() {
+        when(eventsServiceClient.getAvailability(1L))
+                .thenThrow(mock(FeignException.NotFound.class));
+
+        assertThatThrownBy(() -> bookingService.createBooking(sampleRequest))
+                .isInstanceOf(EventServiceException.class)
+                .hasMessageContaining("does not exist");
+
+        verify(eventsServiceClient, never()).reserveSeats(anyLong(), anyInt());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createBooking — should surface a conflict when reservation loses the last seats")
+    void createBooking_shouldThrowException_whenReserveConflicts() {
+        when(eventsServiceClient.getAvailability(1L)).thenReturn(availabilityWithSeats);
+        when(eventsServiceClient.reserveSeats(1L, 2)).thenThrow(mock(FeignException.Conflict.class));
+
+        assertThatThrownBy(() -> bookingService.createBooking(sampleRequest))
+                .isInstanceOf(EventServiceException.class)
+                .hasMessageContaining("another booking");
+
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createBooking — should release reserved seats when persisting the booking fails")
+    void createBooking_shouldReleaseSeats_whenSaveFails() {
+        when(eventsServiceClient.getAvailability(1L)).thenReturn(availabilityWithSeats);
+        when(eventsServiceClient.reserveSeats(1L, 2)).thenReturn(availabilityAfterReserve);
+        when(bookingRepository.save(any(Booking.class))).thenThrow(new RuntimeException("DB down"));
+
+        assertThatThrownBy(() -> bookingService.createBooking(sampleRequest))
+                .isInstanceOf(EventServiceException.class)
+                .hasMessageContaining("Seats have been released");
+
+        verify(eventsServiceClient).releaseSeats(1L, 2);
+    }
+
+    @Test
+    @DisplayName("cancelBooking — should still cancel when the seat-release call fails (best effort)")
+    void cancelBooking_shouldCancel_evenWhenReleaseFails() {
+        when(bookingRepository.findById(10L)).thenReturn(Optional.of(sampleBooking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(eventsServiceClient.releaseSeats(1L, 2)).thenThrow(mock(FeignException.class));
+
+        BookingResponse response = bookingService.cancelBooking(10L);
+
+        assertThat(response.status()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(response.cancelledAt()).isNotNull();
+        verify(eventsServiceClient).releaseSeats(1L, 2);
+    }
+
+    @Test
+    @DisplayName("createBooking — should lowercase the customer email before persisting")
+    void createBooking_shouldLowercaseEmail() {
+        BookingRequest mixedCase = new BookingRequest(1L, "Sanele Dube", "SANELE@Example.COM", 2);
+        when(eventsServiceClient.getAvailability(1L)).thenReturn(availabilityWithSeats);
+        when(eventsServiceClient.reserveSeats(1L, 2)).thenReturn(availabilityAfterReserve);
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        bookingService.createBooking(mixedCase);
+
+        ArgumentCaptor<Booking> captor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository).save(captor.capture());
+        assertThat(captor.getValue().getCustomerEmail()).isEqualTo("sanele@example.com");
+    }
+
+    @Test
+    @DisplayName("getAllBookings — should filter by both eventId and status when supplied")
+    void getAllBookings_shouldFilterByEventIdAndStatus() {
+        when(bookingRepository.findByEventIdAndStatus(1L, BookingStatus.CONFIRMED))
+                .thenReturn(List.of(sampleBooking));
+
+        List<BookingResponse> results = bookingService.getAllBookings(1L, BookingStatus.CONFIRMED);
+
+        assertThat(results).hasSize(1);
+        verify(bookingRepository).findByEventIdAndStatus(1L, BookingStatus.CONFIRMED);
+        verify(bookingRepository, never()).findAll();
     }
 }

@@ -218,4 +218,106 @@ class EventServiceTest {
         // Verify the event status was flipped back to UPCOMING
         assertThat(sampleEvent.getStatus()).isEqualTo(EventStatus.UPCOMING);
     }
+
+    @Test
+    @DisplayName("reserveSeats — should mark event SOLD_OUT when the last seats are reserved")
+    void reserveSeats_shouldMarkSoldOut_whenLastSeatsReserved() {
+        sampleInventory.setAvailableSeats(10);
+        when(eventRepository.findById(1L)).thenReturn(Optional.of(sampleEvent));
+        when(seatInventoryRepository.findByEventIdWithLock(1L)).thenReturn(Optional.of(sampleInventory));
+        when(seatInventoryRepository.save(any())).thenReturn(sampleInventory);
+        when(eventRepository.save(any())).thenReturn(sampleEvent);
+
+        EventAvailabilityResponse response = eventService.reserveSeats(1L, 10);
+
+        assertThat(response.availableSeats()).isZero();
+        assertThat(response.isSoldOut()).isTrue();
+        assertThat(sampleEvent.getStatus()).isEqualTo(EventStatus.SOLD_OUT);
+    }
+
+    @Test
+    @DisplayName("reserveSeats — should throw EventNotFoundException when event does not exist")
+    void reserveSeats_shouldThrowNotFound_whenEventMissing() {
+        when(eventRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventService.reserveSeats(99L, 1))
+                .isInstanceOf(EventNotFoundException.class)
+                .hasMessageContaining("99");
+
+        verify(seatInventoryRepository, never()).findByEventIdWithLock(anyLong());
+    }
+
+    @Test
+    @DisplayName("releaseSeats — should throw IllegalArgumentException when releasing more than reserved")
+    void releaseSeats_shouldThrowIllegalArgument_whenReleasingMoreThanTotal() {
+        sampleInventory.setAvailableSeats(480);
+        sampleInventory.setReservedSeats(20);
+        when(eventRepository.findById(1L)).thenReturn(Optional.of(sampleEvent));
+        when(seatInventoryRepository.findByEventIdWithLock(1L)).thenReturn(Optional.of(sampleInventory));
+
+        assertThatThrownBy(() -> eventService.releaseSeats(1L, 100))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Cannot release more seats");
+
+        verify(seatInventoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateEvent — should apply seat delta to event and inventory when capacity grows")
+    void updateEvent_shouldApplySeatDelta_whenCapacityIncreases() {
+        sampleEvent.setTotalSeats(500);
+        sampleEvent.setAvailableSeats(400);
+        sampleInventory.setTotalSeats(500);
+        sampleInventory.setAvailableSeats(400);
+        EventRequest grown = new EventRequest(
+                "Rock Concert 2026", "Epic rock night", "FNB Stadium, Johannesburg",
+                LocalDateTime.now().plusMonths(2), EventCategory.CONCERT, 600, new BigDecimal("350.00"));
+
+        when(eventRepository.findById(1L)).thenReturn(Optional.of(sampleEvent));
+        when(seatInventoryRepository.findByEventId(1L)).thenReturn(Optional.of(sampleInventory));
+        when(eventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        EventResponse response = eventService.updateEvent(1L, grown);
+
+        assertThat(response.totalSeats()).isEqualTo(600);
+        assertThat(response.availableSeats()).isEqualTo(500);
+        assertThat(sampleInventory.getTotalSeats()).isEqualTo(600);
+        assertThat(sampleInventory.getAvailableSeats()).isEqualTo(500);
+        verify(seatInventoryRepository).save(sampleInventory);
+    }
+
+    @Test
+    @DisplayName("deleteEvent — should delete the event and its seat inventory")
+    void deleteEvent_shouldDeleteEventAndInventory() {
+        when(eventRepository.findById(1L)).thenReturn(Optional.of(sampleEvent));
+        when(seatInventoryRepository.findByEventId(1L)).thenReturn(Optional.of(sampleInventory));
+
+        eventService.deleteEvent(1L);
+
+        verify(seatInventoryRepository).delete(sampleInventory);
+        verify(eventRepository).delete(sampleEvent);
+    }
+
+    @Test
+    @DisplayName("getAvailability — should throw EventNotFoundException when inventory is missing")
+    void getAvailability_shouldThrowNotFound_whenInventoryMissing() {
+        when(eventRepository.findById(1L)).thenReturn(Optional.of(sampleEvent));
+        when(seatInventoryRepository.findByEventId(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventService.getAvailability(1L))
+                .isInstanceOf(EventNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("getAllEvents — should return all events when no filters are supplied")
+    void getAllEvents_shouldReturnAll_whenNoFilters() {
+        when(eventRepository.findAll()).thenReturn(List.of(sampleEvent));
+
+        List<EventResponse> results = eventService.getAllEvents(null, null);
+
+        assertThat(results).hasSize(1);
+        verify(eventRepository).findAll();
+        verify(eventRepository, never()).findByCategory(any());
+        verify(eventRepository, never()).findByStatus(any());
+    }
 }
