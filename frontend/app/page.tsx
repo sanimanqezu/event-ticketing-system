@@ -150,21 +150,13 @@ export default function Home() {
           <div>
             <h3>Front Row</h3>
             <p>
-              A demo ticketing storefront by Sanele Khanyile. The backend is a Spring Boot microservices system -
-              an events service and a bookings service talking over OpenFeign, guarded by a Resilience4j circuit
-              breaker, with pessimistic database locking to stop double-booking under load.
+              Tickets to the concerts, sport and theatre you want to see. Pick an event, choose how many seats
+              and book in seconds - no account needed. Your seats are held the moment you confirm.
             </p>
           </div>
-          <div className="stack">
-            <div>Java 25 · Spring Boot 3</div>
-            <div>OpenFeign · Resilience4j</div>
-            <div>PostgreSQL · Flyway</div>
-            <div>Next.js · React</div>
-            <div style={{ marginTop: 10 }}>
-              <a href="https://github.com/sanimanqezu/event-ticketing-system" target="_blank" rel="noreferrer">
-                View the code on GitHub
-              </a>
-            </div>
+          <div className="foot-meta">
+            <span>&copy; {new Date().getFullYear()} Front Row</span>
+            <span>Secure seat holds · Instant confirmation</span>
           </div>
         </div>
       </footer>
