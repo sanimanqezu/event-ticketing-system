@@ -3,10 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { BookingResponse, EventCategory, EventResponse } from "@/lib/types";
+import { parseLdt } from "@/lib/format";
 import { Navbar } from "@/components/Navbar";
 import { EventCard } from "@/components/EventCard";
 import { BookingModal } from "@/components/BookingModal";
 import { MyTickets } from "@/components/MyTickets";
+
+type SortKey = "soonest" | "price-asc" | "price-desc";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "soonest", label: "Soonest" },
+  { key: "price-asc", label: "Price: low to high" },
+  { key: "price-desc", label: "Price: high to low" },
+];
 
 const FILTERS: { key: EventCategory | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -22,6 +31,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<EventCategory | "ALL">("ALL");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("soonest");
 
   const [bookingEvent, setBookingEvent] = useState<EventResponse | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(false);
@@ -50,10 +61,23 @@ export default function Home() {
   }, [toast]);
 
   const eventsById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
-  const visible = useMemo(
-    () => (filter === "ALL" ? events : events.filter((e) => e.category === filter)),
-    [events, filter],
-  );
+  const visible = useMemo(() => {
+    let list = filter === "ALL" ? events : events.filter((e) => e.category === filter);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (e) => e.name.toLowerCase().includes(q) || e.venue.toLowerCase().includes(q),
+      );
+    }
+    const sorted = [...list];
+    if (sort === "price-asc") sorted.sort((a, b) => a.pricePerSeat - b.pricePerSeat);
+    else if (sort === "price-desc") sorted.sort((a, b) => b.pricePerSeat - a.pricePerSeat);
+    else
+      sorted.sort(
+        (a, b) => (parseLdt(a.eventDate)?.getTime() ?? 0) - (parseLdt(b.eventDate)?.getTime() ?? 0),
+      );
+    return sorted;
+  }, [events, filter, query, sort]);
   const available = useMemo(() => events.filter((e) => e.availableSeats > 0).length, [events]);
   const presentCategories = useMemo(() => new Set(events.map((e) => e.category)), [events]);
 
@@ -97,18 +121,41 @@ export default function Home() {
         </div>
 
         {!loading && !error && events.length > 0 && (
-          <div className="chips">
-            {FILTERS.filter((f) => f.key === "ALL" || presentCategories.has(f.key as EventCategory)).map((f) => (
-              <button
-                key={f.key}
-                className="chip"
-                aria-pressed={filter === f.key}
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="chips">
+              {FILTERS.filter((f) => f.key === "ALL" || presentCategories.has(f.key as EventCategory)).map((f) => (
+                <button
+                  key={f.key}
+                  className="chip"
+                  aria-pressed={filter === f.key}
+                  onClick={() => setFilter(f.key)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="toolbar">
+              <input
+                className="search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search events or venues"
+                aria-label="Search events"
+              />
+              <label className="sort">
+                <span>Sort</span>
+                <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+                  {SORTS.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </>
         )}
 
         {loading ? (
@@ -133,8 +180,17 @@ export default function Home() {
           </div>
         ) : visible.length === 0 ? (
           <div className="state">
-            <h3>No events here yet</h3>
-            <p>Try a different category - new shows are added all the time.</p>
+            <h3>Nothing to show</h3>
+            <p>
+              {query.trim()
+                ? "No events match your search. Try a different name, venue or category."
+                : "Try a different category - new shows are added all the time."}
+            </p>
+            {query.trim() && (
+              <button className="btn btn-sm" style={{ marginTop: 16 }} onClick={() => setQuery("")}>
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { EventCategory, EventResponse } from "@/lib/types";
 import { dayParts, formatTime, zar } from "@/lib/format";
 
@@ -33,7 +34,11 @@ export function EventCard({ event, onBook }: { event: EventResponse; onBook: (e:
           <span className="cat-tag" style={{ background: cat.bg }}>
             {cat.label}
           </span>
-          <h3>{event.name}</h3>
+          <h3>
+            <Link href={`/events/${event.id}`} className="ev-title-link">
+              {event.name}
+            </Link>
+          </h3>
           <div className="venue">
             <span aria-hidden>&#9679;</span>
             {event.venue}

@@ -33,6 +33,9 @@ export const api = {
   listEvents: (): Promise<EventResponse[]> =>
     fetch("/api/events", { cache: "no-store" }).then((r) => parse<EventResponse[]>(r)),
 
+  getEvent: (id: number): Promise<EventResponse> =>
+    fetch(`/api/events/${id}`, { cache: "no-store" }).then((r) => parse<EventResponse>(r)),
+
   createBooking: (body: BookingRequest): Promise<BookingResponse> =>
     fetch("/api/bookings", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) }).then((r) =>
       parse<BookingResponse>(r),
