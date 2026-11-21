@@ -36,7 +36,6 @@ export default function EventDetail() {
 
   const [booking, setBooking] = useState(false);
   const [ticketsOpen, setTicketsOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!Number.isFinite(id)) {
@@ -60,12 +59,6 @@ export default function EventDetail() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4200);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const eventsById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
 
@@ -145,23 +138,8 @@ export default function EventDetail() {
         )}
       </main>
 
-      {booking && event && (
-        <BookingModal
-          event={event}
-          onClose={() => setBooking(false)}
-          onBooked={(b) => {
-            setToast(`Booked ${b.quantity} ${b.quantity === 1 ? "ticket" : "tickets"} - ref #${b.id}.`);
-            load();
-          }}
-        />
-      )}
+      {booking && event && <BookingModal event={event} onClose={() => setBooking(false)} />}
       {ticketsOpen && <MyTickets onClose={() => setTicketsOpen(false)} eventsById={eventsById} onChanged={load} />}
-
-      {toast && (
-        <div className="toast-wrap">
-          <div className="toast">{toast}</div>
-        </div>
-      )}
     </>
   );
 }

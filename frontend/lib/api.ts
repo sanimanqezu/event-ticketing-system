@@ -1,4 +1,10 @@
-import { BookingRequest, BookingResponse, EventResponse } from "./types";
+import {
+  BookingCheckoutRequest,
+  BookingRequest,
+  BookingResponse,
+  CheckoutResponse,
+  EventResponse,
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -38,6 +44,16 @@ export const api = {
 
   createBooking: (body: BookingRequest): Promise<BookingResponse> =>
     fetch("/api/bookings", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) }).then((r) =>
+      parse<BookingResponse>(r),
+    ),
+
+  checkout: (body: BookingCheckoutRequest): Promise<CheckoutResponse> =>
+    fetch("/api/bookings/checkout", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) }).then((r) =>
+      parse<CheckoutResponse>(r),
+    ),
+
+  confirmBooking: (reference: string): Promise<BookingResponse> =>
+    fetch(`/api/bookings/confirm?reference=${encodeURIComponent(reference)}`, { method: "POST" }).then((r) =>
       parse<BookingResponse>(r),
     ),
 

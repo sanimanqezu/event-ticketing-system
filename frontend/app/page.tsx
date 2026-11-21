@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { BookingResponse, EventCategory, EventResponse } from "@/lib/types";
+import { EventCategory, EventResponse } from "@/lib/types";
 import { parseLdt } from "@/lib/format";
 import { Navbar } from "@/components/Navbar";
 import { EventCard } from "@/components/EventCard";
@@ -36,7 +36,6 @@ export default function Home() {
 
   const [bookingEvent, setBookingEvent] = useState<EventResponse | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -53,12 +52,6 @@ export default function Home() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4200);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const eventsById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
   const visible = useMemo(() => {
@@ -80,11 +73,6 @@ export default function Home() {
   }, [events, filter, query, sort]);
   const available = useMemo(() => events.filter((e) => e.availableSeats > 0).length, [events]);
   const presentCategories = useMemo(() => new Set(events.map((e) => e.category)), [events]);
-
-  function onBooked(b: BookingResponse) {
-    setToast({ msg: `Booked ${b.quantity} ${b.quantity === 1 ? "ticket" : "tickets"} - ref #${b.id}.` });
-    load();
-  }
 
   return (
     <>
@@ -217,17 +205,9 @@ export default function Home() {
         </div>
       </footer>
 
-      {bookingEvent && (
-        <BookingModal event={bookingEvent} onClose={() => setBookingEvent(null)} onBooked={onBooked} />
-      )}
+      {bookingEvent && <BookingModal event={bookingEvent} onClose={() => setBookingEvent(null)} />}
       {ticketsOpen && (
         <MyTickets onClose={() => setTicketsOpen(false)} eventsById={eventsById} onChanged={load} />
-      )}
-
-      {toast && (
-        <div className="toast-wrap">
-          <div className={`toast${toast.err ? " err" : ""}`}>{toast.msg}</div>
-        </div>
       )}
     </>
   );

@@ -26,6 +26,17 @@ export interface BookingRequest {
   quantity: number;
 }
 
+export interface BookingCheckoutRequest extends BookingRequest {
+  // Where Paystack returns the customer after paying (the frontend's own page).
+  callbackUrl: string;
+}
+
+export interface CheckoutResponse {
+  authorizationUrl: string;
+  reference: string;
+  amount: number;
+}
+
 export interface BookingResponse {
   id: number;
   eventId: number;
