@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import KeepAlive from "@/components/KeepAlive";
 
 const display = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -25,7 +26,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body>{children}</body>
+      <body>
+        <KeepAlive endpoint="/api/health" />
+        {children}
+      </body>
     </html>
   );
 }

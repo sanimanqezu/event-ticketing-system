@@ -15,6 +15,9 @@ const nextConfig = {
       { source: "/api/events/:path*", destination: `${API}/events/api/events/:path*` },
       { source: "/api/bookings", destination: `${API}/bookings/api/bookings` },
       { source: "/api/bookings/:path*", destination: `${API}/bookings/api/bookings/:path*` },
+      // Keep-alive ping target: proxied to the backend health endpoint so the
+      // browser can warm Render without a cross-origin request.
+      { source: "/api/health", destination: `${API}/actuator/health` },
     ];
   },
 };
